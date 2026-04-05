@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, committee::Committee, messages::*};
-use failure::ensure;
+use anyhow::ensure;
 use std::collections::BTreeMap;
 
 #[cfg(test)]
@@ -36,13 +36,13 @@ pub trait FastPaySmartContract {
     fn handle_funding_transaction(
         &mut self,
         transaction: FundingTransaction,
-    ) -> Result<(), failure::Error>;
+    ) -> Result<(), anyhow::Error>;
 
     /// Finalize a transfer from FastPay to Primary.
     fn handle_redeem_transaction(
         &mut self,
         transaction: RedeemTransaction,
-    ) -> Result<(), failure::Error>;
+    ) -> Result<(), anyhow::Error>;
 }
 
 impl FastPaySmartContract for FastPaySmartContractState {
@@ -50,7 +50,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
     fn handle_funding_transaction(
         &mut self,
         transaction: FundingTransaction,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<(), anyhow::Error> {
         // TODO: Authentication by Primary sender
         let amount = transaction.primary_coins;
         ensure!(
@@ -68,7 +68,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
     fn handle_redeem_transaction(
         &mut self,
         transaction: RedeemTransaction,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<(), anyhow::Error> {
         transaction.transfer_certificate.check(&self.committee)?;
         let order = transaction.transfer_certificate.value;
         let transfer = &order.transfer;

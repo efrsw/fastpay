@@ -144,7 +144,7 @@ impl Authority for AuthorityState {
         let transfer = certificate.value.transfer.clone();
 
         // First we copy all relevant data from sender.
-        let mut sender_account = self
+        let sender_account = self
             .accounts
             .entry(transfer.sender)
             .or_insert_with(AccountOffchainState::new);

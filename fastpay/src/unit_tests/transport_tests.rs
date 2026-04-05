@@ -9,10 +9,8 @@ use std::{
 use tokio::{runtime::Runtime, time::timeout};
 
 async fn get_new_local_address() -> Result<String, std::io::Error> {
-    let builder = net2::TcpBuilder::new_v4()?;
-    builder.reuse_address(true)?;
-    builder.bind("0.0.0.0:0")?;
-    Ok(format!("{}", builder.local_addr()?))
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    Ok(listener.local_addr()?.to_string())
 }
 
 struct TestService {
@@ -64,12 +62,12 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
     // Attempt to gracefully kill server.
     server.kill().await?;
 
-    timeout(Duration::from_millis(500), client.write_data(b"abcd"))
-        .await
-        .unwrap_or(Ok(()))?;
+    // After killing the server, write/read may fail with OS errors on some platforms.
+    let _ = timeout(Duration::from_millis(500), client.write_data(b"abcd")).await;
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Ok(Vec::new()))?
+        .unwrap_or_else(|_| Ok(Vec::new()))
+        .unwrap_or_default()
         .len();
 
     Ok((counter.load(Ordering::Relaxed), received))
@@ -77,7 +75,7 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
 
 #[test]
 fn udp_server() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server(NetworkProtocol::Udp)).unwrap();
     assert_eq!(processed, 13);
     assert_eq!(received, 10);
@@ -85,7 +83,7 @@ fn udp_server() {
 
 #[test]
 fn tcp_server() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server(NetworkProtocol::Tcp)).unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
     assert_eq!(processed, 17);

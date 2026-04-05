@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/User/source/repos/fastpay/fastpay_core/src/*.rs /c/Users/User/source/repos/fastpay/fastpay/src/*.rs)",
+      "Read(//tmp/**)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)"
+    ]
+  }
+}

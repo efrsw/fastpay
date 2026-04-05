@@ -3,6 +3,7 @@ members = [
         "fastpay_core",
         "fastpay",
 ]
+resolver = "3"
 
 [profile.release]
 debug = true

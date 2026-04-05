@@ -9,13 +9,13 @@ use fastpay_core::{
 };
 
 use bytes::Bytes;
+use clap::Parser;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
-use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
 fn make_authority_clients(
@@ -275,48 +275,48 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     }
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[command(
     name = "FastPay Client",
     about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
 )]
 struct ClientOpt {
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-    #[structopt(long)]
+    #[arg(long)]
     accounts: String,
 
     /// Sets the file describing the public configurations of all authorities
-    #[structopt(long)]
+    #[arg(long)]
     committee: String,
 
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value_t = 4000000)]
     send_timeout: u64,
 
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value_t = 4000000)]
     recv_timeout: u64,
 
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    #[arg(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
 
     /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     cmd: ClientCommands,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 enum ClientCommands {
     /// Transfer funds
-    #[structopt(name = "transfer")]
+    #[command(name = "transfer")]
     Transfer {
         /// Sending address (must be one of our accounts)
-        #[structopt(long)]
+        #[arg(long)]
         from: String,
 
         /// Recipient address
-        #[structopt(long)]
+        #[arg(long)]
         to: String,
 
         /// Amount to transfer
@@ -324,33 +324,33 @@ enum ClientCommands {
     },
 
     /// Obtain the spendable balance
-    #[structopt(name = "query_balance")]
+    #[command(name = "query_balance")]
     QueryBalance {
         /// Address of the account
         address: String,
     },
 
     /// Send one transfer per account in bulk mode
-    #[structopt(name = "benchmark")]
+    #[command(name = "benchmark")]
     Benchmark {
         /// Maximum number of requests in flight
-        #[structopt(long, default_value = "200")]
+        #[arg(long, default_value_t = 200)]
         max_in_flight: u64,
 
         /// Use a subset of the accounts to generate N transfers
-        #[structopt(long)]
+        #[arg(long)]
         max_orders: Option<usize>,
 
         /// Use server configuration files to generate certificates (instead of aggregating received votes).
-        #[structopt(long)]
+        #[arg(long)]
         server_configs: Option<Vec<String>>,
     },
 
     /// Create new user accounts and print the public keys
-    #[structopt(name = "create_accounts")]
+    #[command(name = "create_accounts")]
     CreateAccounts {
         /// known initial balance of the account
-        #[structopt(long, default_value = "0")]
+        #[arg(long, default_value_t = Balance::zero())]
         initial_funding: Balance,
 
         /// Number of additional accounts to create
@@ -359,8 +359,8 @@ enum ClientCommands {
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let options = ClientOpt::from_args();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let options = ClientOpt::parse();
 
     let send_timeout = Duration::from_micros(options.send_timeout);
     let recv_timeout = Duration::from_micros(options.recv_timeout);
@@ -379,7 +379,7 @@ fn main() {
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
             let amount = Amount::from(amount);
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
@@ -423,7 +423,7 @@ fn main() {
         ClientCommands::QueryBalance { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
@@ -454,7 +454,7 @@ fn main() {
         } => {
             let max_orders = max_orders.unwrap_or_else(|| accounts_config.num_accounts());
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 warn!("Starting benchmark phase 1 (transfer orders)");
                 let (orders, serialize_orders) =

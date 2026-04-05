@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 
@@ -34,7 +35,7 @@ pub type VersionNumber = SequenceNumber;
 pub struct UserData(pub Option<[u8; 32]>);
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
-pub struct KeyPair(dalek::Keypair);
+pub struct KeyPair(dalek::SigningKey);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
@@ -44,9 +45,11 @@ pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
-    let mut csprng = OsRng;
-    let keypair = dalek::Keypair::generate(&mut csprng);
-    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+    let signing_key = dalek::SigningKey::generate(&mut OsRng);
+    (
+        PublicKeyBytes(signing_key.verifying_key().to_bytes()),
+        KeyPair(signing_key),
+    )
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
@@ -66,11 +69,11 @@ where
 }
 
 pub fn encode_address(key: &PublicKeyBytes) -> String {
-    base64::encode(&key.0[..])
+    STANDARD.encode(&key.0[..])
 }
 
-pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
-    let value = base64::decode(s)?;
+pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+    let value = STANDARD.decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
     Ok(PublicKeyBytes(address))
@@ -88,10 +91,7 @@ pub struct Signature(dalek::Signature);
 impl KeyPair {
     /// Avoid implementing `clone` on secret keys to prevent mistakes.
     pub fn copy(&self) -> KeyPair {
-        KeyPair(dalek::Keypair {
-            secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
-            public: dalek::PublicKey::from_bytes(self.0.public.as_bytes()).unwrap(),
-        })
+        KeyPair(dalek::SigningKey::from_bytes(self.0.as_bytes()))
     }
 }
 
@@ -100,7 +100,7 @@ impl Serialize for KeyPair {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&base64::encode(&self.0.to_bytes()))
+        serializer.serialize_str(&STANDARD.encode(self.0.to_keypair_bytes()))
     }
 }
 
@@ -110,8 +110,12 @@ impl<'de> Deserialize<'de> for KeyPair {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let key = dalek::Keypair::from_bytes(&value)
+        let value =
+            STANDARD.decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let bytes: [u8; 64] = value
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("keypair must be 64 bytes"))?;
+        let key = dalek::SigningKey::from_keypair_bytes(&bytes)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair(key))
     }
@@ -119,7 +123,7 @@ impl<'de> Deserialize<'de> for KeyPair {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.0);
+        let s = STANDARD.encode(self.0.to_bytes());
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -127,7 +131,7 @@ impl std::fmt::Debug for Signature {
 
 impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.0);
+        let s = STANDARD.encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -315,8 +319,8 @@ impl Signature {
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        let public_key = dalek::PublicKey::from_bytes(&author.0)?;
-        public_key.verify(&message, &self.0)
+        let verifying_key = dalek::VerifyingKey::from_bytes(&author.0)?;
+        verifying_key.verify(&message, &self.0)
     }
 
     pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
@@ -338,13 +342,13 @@ impl Signature {
         value.write(&mut msg);
         let mut messages: Vec<&[u8]> = Vec::new();
         let mut signatures: Vec<dalek::Signature> = Vec::new();
-        let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
+        let mut verifying_keys: Vec<dalek::VerifyingKey> = Vec::new();
         for (addr, sig) in votes.into_iter() {
             messages.push(&msg);
             signatures.push(sig.0);
-            public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
+            verifying_keys.push(dalek::VerifyingKey::from_bytes(&addr.0)?);
         }
-        dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
+        dalek::verify_batch(&messages[..], &signatures[..], &verifying_keys[..])
     }
 
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), FastPayError>

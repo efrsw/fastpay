@@ -29,7 +29,7 @@ pub trait Requester {
     type Value: std::fmt::Debug + Send + Clone + 'static;
 
     /// Request the value corresponding to the given key.
-    fn query(&mut self, key: Self::Key) -> future::BoxFuture<Self::Value>;
+    fn query(&mut self, key: Self::Key) -> future::BoxFuture<'_, Self::Value>;
 }
 
 /// Channel for using code to send requests and stop the downloader task.
@@ -56,7 +56,7 @@ enum DownloadStatus<V> {
 
 impl<K, V> DownloadHandle<K, V> {
     /// Allow to make new download queries and wait for the result.
-    pub async fn query(&mut self, key: K) -> Result<V, failure::Error> {
+    pub async fn query(&mut self, key: K) -> Result<V, anyhow::Error> {
         let (callback, receiver) = oneshot::channel();
         self.0.send(DownloadCommand::Request(key, callback)).await?;
         let value = receiver.await?;
@@ -64,7 +64,7 @@ impl<K, V> DownloadHandle<K, V> {
     }
 
     /// Shut down the main handler.
-    pub async fn stop(&mut self) -> Result<(), failure::Error> {
+    pub async fn stop(&mut self) -> Result<(), anyhow::Error> {
         self.0.send(DownloadCommand::Quit).await?;
         Ok(())
     }

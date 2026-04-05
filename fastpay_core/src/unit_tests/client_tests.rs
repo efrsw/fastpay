@@ -21,7 +21,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_transfer_order(
         &mut self,
         order: TransferOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_transfer_order(order) })
     }
@@ -29,7 +29,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move {
             state
@@ -43,7 +43,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_account_info_request(
         &mut self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_account_info_request(request) })
     }
@@ -158,7 +158,7 @@ fn init_local_client_state_with_bad_authority(
 
 #[test]
 fn test_get_strong_majority_balance() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     rt.block_on(async {
         let mut client = init_local_client_state(vec![3, 4, 4, 4]);
         assert_eq!(client.get_strong_majority_balance().await, Balance::from(4));
@@ -173,7 +173,7 @@ fn test_get_strong_majority_balance() {
 
 #[test]
 fn test_initiating_valid_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
 
     let mut sender = init_local_client_state(vec![2, 4, 4, 4]);
@@ -200,7 +200,7 @@ fn test_initiating_valid_transfer() {
 
 #[test]
 fn test_initiating_valid_transfer_despite_bad_authority() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
 
     let mut sender = init_local_client_state_with_bad_authority(vec![4, 4, 4, 4]);
@@ -227,7 +227,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
 
 #[test]
 fn test_initiating_transfer_low_funds() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
 
     let mut sender = init_local_client_state(vec![2, 2, 4, 4]);
@@ -246,7 +246,7 @@ fn test_initiating_transfer_low_funds() {
 
 #[test]
 fn test_bidirectional_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -317,7 +317,7 @@ fn test_bidirectional_transfer() {
 
 #[test]
 fn test_receiving_unconfirmed_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -355,7 +355,7 @@ fn test_receiving_unconfirmed_transfer() {
 
 #[test]
 fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (mut authority_clients, committee) = init_local_authorities(4);
     let mut client0 = make_client(authority_clients.clone(), committee.clone());
     let mut client1 = make_client(authority_clients.clone(), committee.clone());

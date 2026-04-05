@@ -22,14 +22,14 @@ impl Requester for LocalRequester {
     type Key = &'static str;
     type Value = u32;
 
-    fn query(&mut self, _key: Self::Key) -> future::BoxFuture<Self::Value> {
+    fn query(&mut self, _key: Self::Key) -> future::BoxFuture<'_, Self::Value> {
         Box::pin(future::ready(self.0.fetch_add(1, Ordering::Relaxed)))
     }
 }
 
 #[test]
 fn test_local_downloader() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         let requester = LocalRequester::new();
         let (task, mut handle) = Downloader::start(requester, vec![("a", 10), ("d", 11)]);

@@ -1,14 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::arg_enum;
 use futures::future;
 use log::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
 use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
-    prelude::*,
 };
 
 #[cfg(test)]
@@ -19,11 +18,18 @@ mod transport_tests;
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 
 // Supported transport protocols.
-arg_enum! {
-    #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-    pub enum NetworkProtocol {
-        Udp,
-        Tcp,
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, clap::ValueEnum)]
+pub enum NetworkProtocol {
+    Udp,
+    Tcp,
+}
+
+impl std::fmt::Display for NetworkProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkProtocol::Udp => write!(f, "Udp"),
+            NetworkProtocol::Tcp => write!(f, "Tcp"),
+        }
     }
 }
 
@@ -33,7 +39,7 @@ pub trait DataStream: Send {
         &'a mut self,
         buffer: &'a [u8],
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>>;
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>>;
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>>;
 }
 
 /// A pool of (outgoing) data streams.
@@ -151,7 +157,7 @@ impl DataStream for UdpDataStream {
         })
     }
 
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>> {
         Box::pin(async move {
             let size = self.socket.recv(&mut self.buffer).await?;
             Ok(self.buffer[..size].into())
@@ -187,7 +193,7 @@ impl DataStreamPool for UdpDataStreamPool {
 // Server implementation for UDP.
 impl NetworkProtocol {
     async fn run_udp_server<S>(
-        mut socket: UdpSocket,
+        socket: UdpSocket,
         mut state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
@@ -225,8 +231,9 @@ struct TcpDataStream {
 impl TcpDataStream {
     async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
         let stream = TcpStream::connect(address).await?;
-        stream.set_send_buffer_size(max_data_size)?;
-        stream.set_recv_buffer_size(max_data_size)?;
+        let sock_ref = socket2::SockRef::from(&stream);
+        sock_ref.set_send_buffer_size(max_data_size)?;
+        sock_ref.set_recv_buffer_size(max_data_size)?;
         Ok(Self {
             stream,
             max_data_size,
@@ -235,7 +242,7 @@ impl TcpDataStream {
 
     async fn tcp_write_data<S>(stream: &mut S, buffer: &[u8]) -> Result<(), std::io::Error>
     where
-        S: AsyncWrite + Unpin,
+        S: AsyncWriteExt + Unpin,
     {
         stream
             .write_all(&u32::to_le_bytes(
@@ -250,7 +257,7 @@ impl TcpDataStream {
 
     async fn tcp_read_data<S>(stream: &mut S, max_size: usize) -> Result<Vec<u8>, std::io::Error>
     where
-        S: AsyncRead + Unpin,
+        S: AsyncReadExt + Unpin,
     {
         let mut size_buf = [0u8; 4];
         stream.read_exact(&mut size_buf).await?;
@@ -275,7 +282,7 @@ impl DataStream for TcpDataStream {
         Box::pin(Self::tcp_write_data(&mut self.stream, buffer))
     }
 
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>> {
         Box::pin(Self::tcp_read_data(&mut self.stream, self.max_data_size))
     }
 }
@@ -323,7 +330,7 @@ impl DataStreamPool for TcpDataStreamPool {
 // Server implementation for TCP.
 impl NetworkProtocol {
     async fn run_tcp_server<S>(
-        mut listener: TcpListener,
+        listener: TcpListener,
         state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
@@ -333,7 +340,7 @@ impl NetworkProtocol {
     {
         let guarded_state = Arc::new(futures::lock::Mutex::new(state));
         loop {
-            let (mut socket, _) =
+            let (socket, _) =
                 match future::select(exit_future, Box::pin(listener.accept())).await {
                     future::Either::Left(_) => break,
                     future::Either::Right((value, new_exit_future)) => {
@@ -341,8 +348,10 @@ impl NetworkProtocol {
                         value?
                     }
                 };
-            socket.set_send_buffer_size(buffer_size)?;
-            socket.set_recv_buffer_size(buffer_size)?;
+            let sock_ref = socket2::SockRef::from(&socket);
+            sock_ref.set_send_buffer_size(buffer_size)?;
+            sock_ref.set_recv_buffer_size(buffer_size)?;
+            let mut socket = socket;
             let guarded_state = guarded_state.clone();
             tokio::spawn(async move {
                 loop {

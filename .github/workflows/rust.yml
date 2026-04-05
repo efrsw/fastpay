@@ -15,12 +15,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup
+    - uses: actions/checkout@v4
+    - name: Install components
       run: |
-        rustup toolchain install 1.54.0-x86_64-unknown-linux-gnu
-        rustup component add rustfmt --toolchain 1.54.0-x86_64-unknown-linux-gnu
-        rustup component add clippy --toolchain 1.54.0-x86_64-unknown-linux-gnu
+        rustup component add rustfmt
+        rustup component add clippy
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -28,4 +27,4 @@ jobs:
     - name: Rustfmt
       run: cargo fmt -- --check
     - name: Clippy
-      run: cargo clippy --all-targets
+      run: cargo clippy --all-targets -- -D warnings

@@ -6,9 +6,9 @@
 use fastpay::{config::*, network, transport};
 use fastpay_core::{authority::*, base_types::*, committee::Committee};
 
+use clap::Parser;
 use futures::future::join_all;
 use log::*;
-use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
 #[allow(clippy::too_many_arguments)]
@@ -92,71 +92,71 @@ fn make_servers(
     servers
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[command(
     name = "FastPay Server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
 )]
 struct ServerOpt {
     /// Path to the file containing the server configuration of this FastPay authority (including its secret key)
-    #[structopt(long)]
+    #[arg(long)]
     server: String,
 
     /// Subcommands. Acceptable values are run and generate.
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     cmd: ServerCommands,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 enum ServerCommands {
-    /// Runs a service for each shard of the FastPay authority")
-    #[structopt(name = "run")]
+    /// Runs a service for each shard of the FastPay authority
+    #[command(name = "run")]
     Run {
         /// Maximum size of datagrams received and sent (bytes)
-        #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+        #[arg(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
 
         /// Number of cross shards messages allowed before blocking the main server loop
-        #[structopt(long, default_value = "1000")]
+        #[arg(long, default_value_t = 1000)]
         cross_shard_queue_size: usize,
 
         /// Path to the file containing the public description of all authorities in this FastPay committee
-        #[structopt(long)]
+        #[arg(long)]
         committee: String,
 
         /// Path to the file describing the initial user accounts
-        #[structopt(long)]
+        #[arg(long)]
         initial_accounts: String,
 
         /// Runs a specific shard (from 0 to shards-1)
-        #[structopt(long)]
+        #[arg(long)]
         shard: Option<u32>,
     },
 
     /// Generate a new server configuration and output its public description
-    #[structopt(name = "generate")]
+    #[command(name = "generate")]
     Generate {
         /// Chooses a network protocol between Udp and Tcp
-        #[structopt(long, default_value = "Udp")]
+        #[arg(long, default_value_t = transport::NetworkProtocol::Udp)]
         protocol: transport::NetworkProtocol,
 
         /// Sets the public name of the host
-        #[structopt(long)]
+        #[arg(long)]
         host: String,
 
         /// Sets the base port, i.e. the port on which the server listens for the first shard
-        #[structopt(long)]
+        #[arg(long)]
         port: u32,
 
         /// Number of shards for this authority
-        #[structopt(long)]
+        #[arg(long)]
         shards: u32,
     },
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let options = ServerOpt::from_args();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let options = ServerOpt::parse();
 
     let server_config_path = &options.server;
 
@@ -196,7 +196,7 @@ fn main() {
                 }
             };
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             let mut handles = Vec::new();
             for server in servers {
                 handles.push(async move {

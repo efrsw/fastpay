@@ -7,61 +7,61 @@ use fastpay::{network, transport};
 use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, serialize::*};
 
 use bytes::Bytes;
+use clap::Parser;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
-use structopt::StructOpt;
 use tokio::{runtime::Builder, time};
 
 use std::thread;
 
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[command(
     name = "FastPay Benchmark",
     about = "Local end-to-end test and benchmark of the FastPay protocol"
 )]
 struct ClientServerBenchmark {
     /// Choose a network protocol between Udp and Tcp
-    #[structopt(long, default_value = "udp")]
+    #[arg(long, default_value_t = transport::NetworkProtocol::Udp)]
     protocol: transport::NetworkProtocol,
     /// Hostname
-    #[structopt(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "127.0.0.1")]
     host: String,
     /// Base port number
-    #[structopt(long, default_value = "9555")]
+    #[arg(long, default_value_t = 9555)]
     port: u32,
     /// Size of the FastPay committee
-    #[structopt(long, default_value = "10")]
+    #[arg(long, default_value_t = 10)]
     committee_size: usize,
     /// Number of shards per FastPay authority
-    #[structopt(long, default_value = "15")]
+    #[arg(long, default_value_t = 15)]
     num_shards: u32,
     /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "1000")]
+    #[arg(long, default_value_t = 1000)]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "40000")]
+    #[arg(long, default_value_t = 40000)]
     num_accounts: usize,
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value_t = 4000000)]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value_t = 4000000)]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    #[arg(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
     /// Number of cross shards messages allowed before blocking the main server loop
-    #[structopt(long, default_value = "1")]
+    #[arg(long, default_value_t = 1)]
     cross_shard_queue_size: usize,
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let benchmark = ClientServerBenchmark::from_args();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let benchmark = ClientServerBenchmark::parse();
 
     let (states, orders) = benchmark.make_structures();
 
@@ -70,9 +70,8 @@ fn main() {
         // Make special single-core runtime for each server
         let b = benchmark.clone();
         thread::spawn(move || {
-            let mut runtime = Builder::new()
+            let runtime = Builder::new_current_thread()
                 .enable_all()
-                .basic_scheduler()
                 .thread_stack_size(15 * 1024 * 1024)
                 .build()
                 .unwrap();
@@ -86,9 +85,8 @@ fn main() {
         });
     }
 
-    let mut runtime = Builder::new()
+    let runtime = Builder::new_current_thread()
         .enable_all()
-        .basic_scheduler()
         .thread_stack_size(15 * 1024 * 1024)
         .build()
         .unwrap();
@@ -193,7 +191,7 @@ impl ClientServerBenchmark {
     }
 
     async fn launch_client(&self, mut orders: Vec<(u32, Bytes)>) {
-        time::delay_for(Duration::from_millis(1000)).await;
+        time::sleep(Duration::from_millis(1000)).await;
 
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
