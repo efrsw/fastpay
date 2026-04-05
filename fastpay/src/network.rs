@@ -73,7 +73,7 @@ impl Server {
             } else {
                 debug!("Sent cross shard query: {} -> {}", this_shard, shard);
                 queries_sent += 1;
-                if queries_sent % 2000 == 0 {
+                if queries_sent.is_multiple_of(2000) {
                     info!(
                         "{}:{} (shard {}) has sent {} cross-shard queries",
                         base_address,
@@ -194,7 +194,7 @@ impl MessageHandler for RunningServerState {
             };
 
             self.server.packets_processed += 1;
-            if self.server.packets_processed % 5000 == 0 {
+            if self.server.packets_processed.is_multiple_of(5000) {
                 info!(
                     "{}:{} (shard {}) has processed {} packets",
                     self.server.base_address,
@@ -388,7 +388,7 @@ impl MassClient {
                 }
                 in_flight += 1;
             }
-            if requests.len() % 5000 == 0 && requests.len() > 0 {
+            if requests.len().is_multiple_of(5000) && requests.len() > 0 {
                 info!("In flight {} Remaining {}", in_flight, requests.len());
             }
             match time::timeout(self.recv_timeout, stream.read_data()).await {

@@ -32,7 +32,7 @@ impl Committee {
     pub fn validity_threshold(&self) -> usize {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        (self.total_votes + 2) / 3
+        self.total_votes.div_ceil(3)
     }
 
     /// Find the highest value than is supported by a quorum of authorities.

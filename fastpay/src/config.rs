@@ -48,7 +48,7 @@ impl AuthorityServerConfig {
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
         let mut writer = BufWriter::new(file);
         let data = serde_json::to_string_pretty(self).unwrap();
         writer.write_all(data.as_ref())?;
@@ -72,7 +72,7 @@ impl CommitteeConfig {
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
         let mut writer = BufWriter::new(file);
         for config in &self.authorities {
             serde_json::to_writer(&mut writer, config)?;
@@ -152,22 +152,21 @@ impl AccountsConfig {
 
     pub fn update_for_received_transfer(&mut self, certificate: CertifiedTransferOrder) {
         let transfer = &certificate.value.transfer;
-        if let Address::FastPay(recipient) = &transfer.recipient {
-            if let Some(config) = self.accounts.get_mut(recipient) {
-                if let Err(position) = config
-                    .received_certificates
-                    .binary_search_by_key(&certificate.key(), CertifiedTransferOrder::key)
-                {
-                    config.balance = config.balance.try_add(transfer.amount.into()).unwrap();
-                    config.received_certificates.insert(position, certificate)
-                }
-            }
+        if let Address::FastPay(recipient) = &transfer.recipient
+            && let Some(config) = self.accounts.get_mut(recipient)
+            && let Err(position) = config
+                .received_certificates
+                .binary_search_by_key(&certificate.key(), CertifiedTransferOrder::key)
+        {
+            config.balance = config.balance.try_add(transfer.amount.into()).unwrap();
+            config.received_certificates.insert(position, certificate)
         }
     }
 
     pub fn read_or_create(path: &str) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .read(true)
             .open(path)?;
@@ -215,7 +214,7 @@ impl InitialStateConfig {
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
+        let file = OpenOptions::new().append(true).open(path)?;
         let mut writer = BufWriter::new(file);
         for (address, balance) in &self.accounts {
             writeln!(writer, "{}:{}", encode_address(address), balance)?;

@@ -34,7 +34,9 @@ pub enum FastPayError {
     // Transfer processing
     #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
-    #[error("The given sequence number must match the next expected sequence number of the account")]
+    #[error(
+        "The given sequence number must match the next expected sequence number of the account"
+    )]
     UnexpectedSequenceNumber,
     #[error(
         "The transferred amount must be not exceed the current account balance: {current_balance:?}"
@@ -43,7 +45,9 @@ pub enum FastPayError {
     #[error(
         "Cannot initiate transfer while a transfer order is still pending confirmation: {pending_confirmation:?}"
     )]
-    PreviousTransferMustBeConfirmedFirst { pending_confirmation: TransferOrder },
+    PreviousTransferMustBeConfirmedFirst {
+        pending_confirmation: Box<TransferOrder>,
+    },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]

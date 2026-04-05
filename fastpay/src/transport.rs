@@ -263,8 +263,7 @@ impl TcpDataStream {
         stream.read_exact(&mut size_buf).await?;
         let size = u32::from_le_bytes(size_buf);
         if size as usize > max_size {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Message size exceeds buffer size",
             ));
         }

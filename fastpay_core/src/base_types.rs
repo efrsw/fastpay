@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 
@@ -110,8 +110,9 @@ impl<'de> Deserialize<'de> for KeyPair {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value =
-            STANDARD.decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let value = STANDARD
+            .decode(&s)
+            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let bytes: [u8; 64] = value
             .try_into()
             .map_err(|_| serde::de::Error::custom("keypair must be 64 bytes"))?;
@@ -131,7 +132,7 @@ impl std::fmt::Debug for Signature {
 
 impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = STANDARD.encode(&self.0);
+        let s = STANDARD.encode(self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -165,7 +166,7 @@ impl Balance {
     }
 
     pub fn max() -> Self {
-        Balance(std::i128::MAX)
+        Balance(i128::MAX)
     }
 
     pub fn try_add(&self, other: Self) -> Result<Self, FastPayError> {

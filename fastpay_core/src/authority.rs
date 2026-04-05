@@ -106,7 +106,7 @@ impl Authority for AuthorityState {
                     fp_ensure!(
                         &pending_confirmation.value.transfer == transfer,
                         FastPayError::PreviousTransferMustBeConfirmedFirst {
-                            pending_confirmation: pending_confirmation.value.clone()
+                            pending_confirmation: Box::new(pending_confirmation.value.clone())
                         }
                     );
                     // This exact transfer order was already signed. Return the previous value.
@@ -144,10 +144,7 @@ impl Authority for AuthorityState {
         let transfer = certificate.value.transfer.clone();
 
         // First we copy all relevant data from sender.
-        let sender_account = self
-            .accounts
-            .entry(transfer.sender)
-            .or_insert_with(AccountOffchainState::new);
+        let sender_account = self.accounts.entry(transfer.sender).or_default();
         let mut sender_sequence_number = sender_account.next_sequence_number;
         let mut sender_balance = sender_account.balance;
 
@@ -181,10 +178,7 @@ impl Authority for AuthorityState {
         };
         // If the recipient is in the same shard, read and update the account.
         if self.in_shard(&recipient) {
-            let recipient_account = self
-                .accounts
-                .entry(recipient)
-                .or_insert_with(AccountOffchainState::new);
+            let recipient_account = self.accounts.entry(recipient).or_default();
             recipient_account.balance = recipient_account
                 .balance
                 .try_add(transfer.amount.into())
@@ -216,10 +210,7 @@ impl Authority for AuthorityState {
             }
         };
         fp_ensure!(self.in_shard(&recipient), FastPayError::WrongShard);
-        let recipient_account = self
-            .accounts
-            .entry(recipient)
-            .or_insert_with(AccountOffchainState::new);
+        let recipient_account = self.accounts.entry(recipient).or_default();
         recipient_account.balance = recipient_account
             .balance
             .try_add(transfer.amount.into())
@@ -237,10 +228,7 @@ impl Authority for AuthorityState {
         let recipient = order.recipient;
         fp_ensure!(self.in_shard(&recipient), FastPayError::WrongShard);
 
-        let recipient_account = self
-            .accounts
-            .entry(recipient)
-            .or_insert_with(AccountOffchainState::new);
+        let recipient_account = self.accounts.entry(recipient).or_default();
         if order.transaction_index <= self.last_transaction_index {
             // Ignore old transaction index.
             return Ok(recipient_account.make_account_info(recipient));
