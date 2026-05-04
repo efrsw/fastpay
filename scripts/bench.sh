@@ -6,7 +6,7 @@ num_shards=15
 num_accounts=500000
 max_in_flight=700
 committee_size=4
-protocol=UDP
+protocol=udp
 
 if [ "$1" != "" ]; then
 	num_shards=$1
@@ -35,10 +35,10 @@ killall client || true
 rm *.json || true
 
 # Create committee and server configs.
-key_files=""
+server_config_args=""
 for (( i=1; i<=$committee_size; i++ ))
 do
-	key_files="$key_files server-$i.json"
+	server_config_args="$server_config_args --server-configs server-$i.json"
 	./server --server server-"$i".json generate \
 		--host 127.0.0.1 \
 		--port 9500 \
@@ -48,14 +48,13 @@ do
 done
 
 # Create clients' accounts.
-./client --committee committee.json --accounts accounts.json create_accounts $num_accounts >> initial_accounts.json
+./client --committee committee.json --accounts accounts.json create_accounts --initial-funding 100 $num_accounts >> initial_accounts.json
 
 # Run a single authority (with multiple shards).
 for (( i=0; i<$num_shards; i++ ))
 do
 	./server --server server-1.json run \
-		--initial_accounts initial_accounts.json \
-		--initial_balance 100 \
+		--initial-accounts initial_accounts.json \
 		--committee committee.json \
 		--shard $i &
 done
@@ -65,6 +64,6 @@ sleep 1 # wait for server to be ready before benchmark
 read -r line < committee.json
 echo "$line" > committee-single.json
 ./client --committee committee-single.json --accounts accounts.json benchmark \
-	--server_configs $key_files \
-	--max_in_flight $max_in_flight
+	$server_config_args \
+	--max-in-flight $max_in_flight
 	
