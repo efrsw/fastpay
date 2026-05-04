@@ -166,7 +166,6 @@ impl AccountsConfig {
     pub fn read_or_create(path: &str) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .create(true)
-            .truncate(true)
             .write(true)
             .read(true)
             .open(path)?;
@@ -181,7 +180,7 @@ impl AccountsConfig {
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().write(true).open(path)?;
+        let file = OpenOptions::new().write(true).truncate(true).open(path)?;
         let mut writer = BufWriter::new(file);
         for account in self.accounts.values() {
             serde_json::to_writer(&mut writer, account)?;
